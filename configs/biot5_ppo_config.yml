@@ -1,61 +1,60 @@
 train:
-  seq_length: 612
-  epochs: 100
-  total_steps: 100000
-  batch_size: 12
+  seq_length: 1024
+  epochs: 1
+  total_steps: 10000
+  batch_size: 128
 
   checkpoint_interval: 10000
-  eval_interval: 500
-  save_best: False
+  eval_interval: 100
 
   pipeline: "PromptPipeline"
   trainer: "AcceleratePPOTrainer"
+  
+  tracker: "tensorboard"
+  logging_dir: "log"
 
 model:
-  model_path: "google/flan-t5-large"
-  model_arch_type: "seq2seq"
+  model_path: "justinphan3110/biot5_chemprot"
   num_layers_unfrozen: 2
+  model_arch_type: "seq2seq"
 
 tokenizer:
-  tokenizer_path: "google/flan-t5-large"
+  tokenizer_path: "justinphan3110/biot5_chemprot"
   truncation_side: "right"
 
 optimizer:
   name: "adamw"
   kwargs:
-    lr: 1.0e-5
-    betas: [0.9, 0.999]
+    lr: 1.0e-4
+    betas: [0.9, 0.95]
     eps: 1.0e-8
     weight_decay: 1.0e-6
 
 scheduler:
   name: "cosine_annealing"
   kwargs:
-    T_max: 10000
-    eta_min: 1.0e-6
+    T_max: 10000 # train.total_steps
+    eta_min: 1.0e-4
 
 method:
   name: "ppoconfig"
-  num_rollouts: 512
-  chunk_size: 12
+  num_rollouts: 128
+  chunk_size: 128
   ppo_epochs: 4
   init_kl_coef: 0.05
   target: 6
   horizon: 10000
-  gamma: 0.99
+  gamma: 1
   lam: 0.95
   cliprange: 0.2
   cliprange_value: 0.2
-  vf_coef: 1.0
+  vf_coef: 1
   scale_reward: False
   ref_mean: null
   ref_std: null
   cliprange_reward: 10
   gen_kwargs:
-    max_new_tokens: 100
-  gen_experience_kwargs:
-    max_new_tokens: 100
+    max_new_tokens: 40
+    top_k: 0
+    top_p: 1.0
     do_sample: True
-    temperature: 1.0
-    top_k: 50
-    top_p: 0.95
