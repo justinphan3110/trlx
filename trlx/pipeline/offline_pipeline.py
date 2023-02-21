@@ -3,7 +3,8 @@ from typing import Iterable, List, Union
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
-from transformers import DataCollatorWithPadding, PreTrainedTokenizer
+from transformers import DataCollatorWithPadding, PreTrainedTokenizer, DataCollatorForSeq2Seq
+from datasets import Dataset
 
 from trlx.data.ilql_types import ILQLBatch, ILQLElement
 from trlx.pipeline import BasePipeline, BaseRolloutStore, register_datapipeline
@@ -78,6 +79,44 @@ class PromptPipeline(BasePipeline):
     def create_loader(self, batch_size: int, shuffle=False) -> DataLoader:
         collate_fn = DataCollatorWithPadding(self.tokenizer) if self.tokenizer else torch.vstack
         return DataLoader(self, batch_size=batch_size, collate_fn=collate_fn, shuffle=shuffle)
+    
+@register_datapipeline
+class PromptSeq2SeqPipeline(BasePipeline):
+    """
+    Tokenizes prompts, unless they are already tokenized, and truncates them to `max_prompt_length` from the right
+    """
+
+    def __init__(self, prompts: List[str], max_prompt_length: int, tokenizer: PreTrainedTokenizer):
+
+        super().__init__()
+
+        self.tokenizer = tokenizer
+        # self.model = model
+        self.max_prompt_length = max_prompt_length
+
+        dataset = Dataset.from_dict({"inputs": prompts})
+        tokenized_dataset = dataset.map(self.preprocess_function, batched=True, remove_columns=["inputs"], num_proc=1)
+        
+        self.prompts = [
+            {"input_ids": input_ids, "attention_mask": mask} for input_ids, mask in zip(tokenized_dataset['input_ids'], tokenized_dataset['attention_mask'])
+        ]
+    def preprocess_function(self, examples):
+        model_inputs = self.tokenizer(
+            examples["inputs"], max_length=self.max_prompt_length, truncation=True, padding=True
+        )
+        return model_inputs
+    
+    def __getitem__(self, ix: int):
+        return self.prompts[ix]
+
+    def __len__(self) -> int:
+        return len(self.prompts)
+
+    def create_loader(self, batch_size: int, shuffle=False) -> DataLoader:
+        collate_fn = DataCollatorForSeq2Seq(self.tokenizer, return_tensors="pt")
+        return DataLoader(self, batch_size=batch_size, collate_fn=collate_fn, shuffle=shuffle)
+
+
 
 
 def ilql_collate_fn(elems: Iterable[ILQLElement]):
